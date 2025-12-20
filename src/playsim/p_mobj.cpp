@@ -161,7 +161,7 @@ CUSTOM_CVAR (Float, sv_gravity, 800.f, CVAR_SERVERINFO|CVAR_NOSAVE|CVAR_NOINITCA
 }
 
 CVAR (Bool, cl_missiledecals, true, CVAR_ARCHIVE)
-CVAR (Bool, addrocketexplosion, false, CVAR_ARCHIVE)
+CVAR (Bool, addrocketexplosion, true, CVAR_ARCHIVE)
 CVAR (Int, cl_pufftype, 0, CVAR_ARCHIVE);
 CVAR (Int, cl_bloodtype, 0, CVAR_ARCHIVE);
 
@@ -3901,7 +3901,7 @@ bool AActor::AdjustReflectionAngle (AActor *thing, DAngle &angle)
 	return false;
 }
 
-int AActor::AbsorbDamage(int damage, FName dmgtype, AActor *inflictor, AActor *source, int flags)
+int AActor::AbsorbDamage(int damage, FName dmgtype, AActor *inflictor, AActor *source, int flags, DAngle angle)
 {
 	AActor *next;
 	for (AActor *item = Inventory; item != nullptr; item = next)
@@ -3910,8 +3910,8 @@ int AActor::AbsorbDamage(int damage, FName dmgtype, AActor *inflictor, AActor *s
 		next = item->Inventory;
 		IFVIRTUALPTRNAME(item, NAME_Inventory, AbsorbDamage)
 		{
-			VMValue params[7] = { item, damage, dmgtype.GetIndex(), &damage, inflictor, source, flags };
-			VMCall(func, params, 7, nullptr, 0);
+			VMValue params[8] = { item, damage, dmgtype.GetIndex(), &damage, inflictor, source, flags, angle.Degrees() };
+			VMCall(func, params, 8, nullptr, 0);
 		}
 	}
 	return damage;
@@ -5600,7 +5600,7 @@ AActor *AActor::StaticSpawn(FLevelLocals *Level, PClassActor *type, const DVecto
 
 	AActor *actor;
 
-	if (GetDefaultByType(type)->ObjectFlags & OF_ClientSide)
+	if (GetDefaultByType(type)->IsClientSide())
 	{
 		actor = static_cast<AActor*>(Level->CreateClientSideThinker(type));
 	}
@@ -5627,7 +5627,7 @@ DEFINE_ACTION_FUNCTION(AActor, Spawn)
 
 static AActor* SpawnClientSide(PClassActor* type, double x, double y, double z, int flags)
 {
-	if (!(GetDefaultByType(type)->ObjectFlags & OF_ClientSide))
+	if (!GetDefaultByType(type)->IsClientSide())
 	{
 		ThrowAbortException(X_OTHER, "Tried to spawn a non-clientside Actor from a clientside spawn function.");
 		return nullptr;
@@ -7440,30 +7440,39 @@ foundone:
 	{
 		if (smallsplash && splash->SmallSplash)
 		{
-			mo = Spawn(sec->Level, splash->SmallSplash, pos, ALLOW_REPLACE);
-			mo->target = thing;
-			if (mo) mo->Floorclip += splash->SmallSplashClip;
+			if (!thing->IsClientSide() || GetDefaultByType(splash->SmallSplash)->IsClientSide())
+			{
+				mo = Spawn(sec->Level, splash->SmallSplash, pos, ALLOW_REPLACE);
+				mo->target = thing;
+				if (mo) mo->Floorclip += splash->SmallSplashClip;
+			}
 		}
 		else
 		{
 			if (splash->SplashChunk)
 			{
-				mo = Spawn(sec->Level, splash->SplashChunk, pos, ALLOW_REPLACE);
-				mo->target = thing;
-				if (splash->ChunkXVelShift != 255)
+				if (!thing->IsClientSide() || GetDefaultByType(splash->SplashChunk)->IsClientSide())
 				{
-					mo->Vel.X = (pr_chunk.Random2() << splash->ChunkXVelShift) / 65536.;
+					mo = Spawn(sec->Level, splash->SplashChunk, pos, ALLOW_REPLACE);
+					mo->target = thing;
+					if (splash->ChunkXVelShift != 255)
+					{
+						mo->Vel.X = (pr_chunk.Random2() << splash->ChunkXVelShift) / 65536.;
+					}
+					if (splash->ChunkYVelShift != 255)
+					{
+						mo->Vel.Y = (pr_chunk.Random2() << splash->ChunkYVelShift) / 65536.;
+					}
+					mo->Vel.Z = splash->ChunkBaseZVel + (pr_chunk() << splash->ChunkZVelShift) / 65536.;
 				}
-				if (splash->ChunkYVelShift != 255)
-				{
-					mo->Vel.Y = (pr_chunk.Random2() << splash->ChunkYVelShift) / 65536.;
-				}
-				mo->Vel.Z = splash->ChunkBaseZVel + (pr_chunk() << splash->ChunkZVelShift) / 65536.;
 			}
 			if (splash->SplashBase)
 			{
-				mo = Spawn(sec->Level, splash->SplashBase, pos, ALLOW_REPLACE);
-				mo->target = thing;
+				if (!thing->IsClientSide() || GetDefaultByType(splash->SplashBase)->IsClientSide())
+				{
+					mo = Spawn(sec->Level, splash->SplashBase, pos, ALLOW_REPLACE);
+					mo->target = thing;
+				}
 			}
 			if (thing->player && !splash->NoAlert && alert)
 			{
@@ -7511,8 +7520,6 @@ DEFINE_ACTION_FUNCTION(AActor, HitWater)
 
 bool P_HitFloor (AActor *thing)
 {
-	const msecnode_t *m;
-
 	// killough 11/98: touchy objects explode on impact
 	// Allow very short drops to be safe, so that a touchy can be summoned without exploding.
 	if (thing->flags6 & MF6_TOUCHY && ((thing->flags6 & MF6_ARMED) || thing->IsSentient()) && thing->Vel.Z < -5)
@@ -7524,34 +7531,68 @@ bool P_HitFloor (AActor *thing)
 
 	// don't splash if landing on the edge above water/lava/etc....
 	DVector3 pos;
-	for (m = thing->touching_sectorlist; m; m = m->m_tnext)
+	sector_t* sec = nullptr;
+	if (thing->IsClientSide())
 	{
-		pos = thing->PosRelative(m->m_sector);
-		if (thing->Z() == m->m_sector->floorplane.ZatPoint(pos))
+		if (thing->Sector != nullptr)
 		{
-			break;
-		}
-
-		// Check 3D floors
-		for(unsigned int i=0;i<m->m_sector->e->XFloor.ffloors.Size();i++)
-		{		
-			F3DFloor * rover = m->m_sector->e->XFloor.ffloors[i];
-			if (!(rover->flags & FF_EXISTS)) continue;
-			if (rover->flags & (FF_SOLID|FF_SWIMMABLE))
+			sec = thing->Sector;
+			pos = thing->Pos();
+			if (thing->Z() != sec->floorplane.ZatPoint(pos))
 			{
-				if (rover->top.plane->ZatPoint(pos) == thing->Z())
+				// Check 3D floors
+				for (unsigned int i = 0; i < sec->e->XFloor.ffloors.Size(); i++)
 				{
-					return P_HitWater (thing, m->m_sector, pos);
+					F3DFloor* rover = sec->e->XFloor.ffloors[i];
+					if (!(rover->flags & FF_EXISTS)) continue;
+					if (rover->flags & (FF_SOLID | FF_SWIMMABLE))
+					{
+						if (rover->top.plane->ZatPoint(pos) == thing->Z())
+						{
+							return P_HitWater(thing, sec, pos);
+						}
+					}
 				}
+				sec = nullptr;
 			}
 		}
 	}
-	if (m == NULL || m->m_sector->GetHeightSec() != NULL)
-	{ 
+	else
+	{
+		const msecnode_t* m;
+		for (m = thing->touching_sectorlist; m != nullptr; m = m->m_tnext)
+		{
+			sec = m->m_sector;
+			pos = thing->PosRelative(sec);
+			if (thing->Z() == sec->floorplane.ZatPoint(pos))
+			{
+				break;
+			}
+
+			// Check 3D floors
+			for (unsigned int i = 0; i < sec->e->XFloor.ffloors.Size(); i++)
+			{
+				F3DFloor* rover = sec->e->XFloor.ffloors[i];
+				if (!(rover->flags & FF_EXISTS)) continue;
+				if (rover->flags & (FF_SOLID | FF_SWIMMABLE))
+				{
+					if (rover->top.plane->ZatPoint(pos) == thing->Z())
+					{
+						return P_HitWater(thing, sec, pos);
+					}
+				}
+			}
+		}
+		if (m == nullptr)
+			sec = nullptr;
+	}
+
+	if (sec == nullptr || sec->GetHeightSec() != nullptr)
+	{
 		return false;
 	}
 
-	return P_HitWater (thing, m->m_sector, pos);
+	return P_HitWater (thing, sec, pos);
 }
 
 DEFINE_ACTION_FUNCTION(AActor, HitFloor)
@@ -8291,19 +8332,22 @@ DEFINE_ACTION_FUNCTION(AActor, DoSpecialDamage)
 	PARAM_OBJECT_NOT_NULL(target, AActor);
 	PARAM_INT(damage);
 	PARAM_NAME(damagetype);
+	PARAM_INT(flags); //[MC] Only needed for Super.DoSpecialDamage() calls to maintain consistency for all parameters
+	PARAM_ANGLE(angle);
+
 	ACTION_RETURN_INT(self->DoSpecialDamage(target, damage, damagetype));
 }
 
-int AActor::CallDoSpecialDamage(AActor *target, int damage, FName damagetype)
+int AActor::CallDoSpecialDamage(AActor *target, int damage, FName damagetype, int flags, DAngle angle)
 {
 	IFVIRTUAL(AActor, DoSpecialDamage)
 	{
 		// Without the type cast this picks the 'void *' assignment...
-		VMValue params[4] = { (DObject*)this, (DObject*)target, damage, damagetype.GetIndex() };
+		VMValue params[6] = {(DObject *)this, (DObject *)target, damage, damagetype.GetIndex(), flags, angle.Degrees() };
 		VMReturn ret;
 		int retval;
 		ret.IntAt(&retval);
-		VMCall(func, params, 4, &ret, 1);
+		VMCall(func, params, 6, &ret, 1);
 		return retval;
 	}
 	else return DoSpecialDamage(target, damage, damagetype);
@@ -8357,18 +8401,21 @@ DEFINE_ACTION_FUNCTION(AActor, TakeSpecialDamage)
 	PARAM_OBJECT(source, AActor);
 	PARAM_INT(damage);
 	PARAM_NAME(damagetype);
+	PARAM_INT(flags); //[MC] Only needed for Super.TakeSpecialDamage() calls to maintain consistency for all parameters
+	PARAM_ANGLE(angle);
+
 	ACTION_RETURN_INT(self->TakeSpecialDamage(inflictor, source, damage, damagetype));
 }
 
-int AActor::CallTakeSpecialDamage(AActor *inflictor, AActor *source, int damage, FName damagetype)
+int AActor::CallTakeSpecialDamage(AActor *inflictor, AActor *source, int damage, FName damagetype, int flags, DAngle angle)
 {
 	IFVIRTUAL(AActor, TakeSpecialDamage)
 	{
-		VMValue params[5] = { (DObject*)this, inflictor, source, damage, damagetype.GetIndex() };
+		VMValue params[7] = { (DObject*)this, inflictor, source, damage, damagetype.GetIndex(), flags, angle.Degrees() };
 		VMReturn ret;
 		int retval;
 		ret.IntAt(&retval);
-		VMCall(func, params, 5, &ret, 1);
+		VMCall(func, params, 7, &ret, 1);
 		return retval;
 	}
 	else return TakeSpecialDamage(inflictor, source, damage, damagetype);
@@ -8615,7 +8662,7 @@ void AActor::ClearCounters()
 	}
 }
 
-int AActor::GetModifiedDamage(FName damagetype, int damage, bool passive, AActor *inflictor, AActor *source, int flags)
+int AActor::GetModifiedDamage(FName damagetype, int damage, bool passive, AActor *inflictor, AActor *source, int flags, DAngle angle)
 {
 	auto inv = Inventory;
 	while (inv != nullptr && !(inv->ObjectFlags & OF_EuthanizeMe))
@@ -8623,8 +8670,8 @@ int AActor::GetModifiedDamage(FName damagetype, int damage, bool passive, AActor
 		auto nextinv = inv->Inventory;
 		IFVIRTUALPTRNAME(inv, NAME_Inventory, ModifyDamage)
 		{
-			VMValue params[8] = { (DObject*)inv, damage, damagetype.GetIndex(), &damage, passive, inflictor, source, flags };
-			VMCall(func, params, 8, nullptr, 0);
+			VMValue params[9] = { (DObject*)inv, damage, damagetype.GetIndex(), &damage, passive, inflictor, source, flags, angle.Degrees() };
+			VMCall(func, params, 9, nullptr, 0);
 		}
 		inv = nextinv;
 	}

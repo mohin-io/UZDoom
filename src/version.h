@@ -60,7 +60,7 @@ const char *GetVersionString();
 // Version stored in the ini's [LastRun] section.
 // Bump it if you made some configuration change that you want to
 // be able to migrate in FGameConfigFile::DoGlobalSetup().
-#define LASTRUNVERSION "226"
+#define LASTRUNVERSION "229"
 
 // Protocol version used in demos.
 // Bump it if you change existing DEM_ commands or add new ones.
@@ -87,6 +87,11 @@ const char *GetVersionString();
 
 // This is so that derivates can use the same savegame versions without worrying about engine compatibility
 #define GAMESIG "UZDOOM"
+
+#ifndef LOAD_GZDOOM_4142_SAVES
+    #define LOAD_GZDOOM_4142_SAVES 1
+#endif
+
 #define BASEWAD "uzdoom.pk3"
 // Set OPTIONALWAD to "" (null) to disable searching for it
 #define OPTIONALWAD "game_support.pk3"
@@ -108,8 +113,6 @@ const char *GetVersionString();
 #define GAME_DIR GAMENAME
 #elif defined(__HAIKU__)
 #define GAME_DIR "config/settings/" GAMENAME
-#else
-#define GAME_DIR ".config/" GAMENAMELOWERCASE
 #endif
 
 #define DEFAULT_DISCORD_APP_ID "1428620310302691349"
@@ -118,6 +121,5 @@ const int SAVEPICWIDTH = 216;
 const int SAVEPICHEIGHT = 162;
 const int VID_MIN_WIDTH = 320;
 const int VID_MIN_HEIGHT = 200;
-
 
 #endif //__VERSION_H__

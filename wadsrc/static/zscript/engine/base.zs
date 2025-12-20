@@ -175,6 +175,9 @@ enum EPrintLevel
 	PRINT_TYPES = 1023,		// Bitmask.
 	PRINT_NONOTIFY = 1024,	// Flag - do not add to notify buffer
 	PRINT_NOLOG = 2048,		// Flag - do not print to log file
+	PRINT_NOCONSOLE = 16384, // Flag - Don't add to console
+
+	PRINT_NOLOGCONSOLE = PRINT_NOLOG|PRINT_NOCONSOLE,
 };
 
 enum EDebugLevel
@@ -550,7 +553,7 @@ class Shape2D : Object native
 class Canvas : Object native abstract
 {
 	native void Clear(int left, int top, int right, int bottom, Color color, int palcolor = -1);
-	native void Dim(Color col, double amount, int x, int y, int w, int h, ERenderStyle style = STYLE_Translucent);
+	native void Dim(Color col, double amount, int x, int y, int w, int h, ERenderStyle style = STYLE_Translucent, bool overwritealpha = false);
 
 	native vararg void DrawTexture(TextureID tex, bool animate, double x, double y, ...);
 	native vararg void DrawShape(TextureID tex, bool animate, Shape2D s, ...);

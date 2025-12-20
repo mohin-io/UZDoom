@@ -72,9 +72,10 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 
 	VSMatrix objectToWorldMatrix = smf->ObjectToWorldMatrix(actor, x, y, z, ticFrac);
 
-	float scaleFactorX = actor->Scale.X * smf->xscale;
-	float scaleFactorY = actor->Scale.X * smf->yscale;
-	float scaleFactorZ = actor->Scale.Y * smf->zscale;
+	const DVector2 scale = actor->InterpolatedScale(ticFrac);
+	float scaleFactorX = scale.X * smf->xscale;
+	float scaleFactorY = scale.X * smf->yscale;
+	float scaleFactorZ = scale.Y * smf->zscale;
 	float orientation = scaleFactorX * scaleFactorY * scaleFactorZ;
 
 	renderer->BeginDrawModel(actor->RenderStyle, smf_flags, objectToWorldMatrix, orientation < 0);
@@ -134,12 +135,12 @@ VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(AActor * actor, float x, float y
 
 	double tic = actor->Level->totaltime;
 
-	if (!WorldPaused() && !actor->isFrozen())
+	if (!WorldPaused(true) && !actor->isFrozen())
 	{
 		tic += ticFrac;
 	}
 
-	return ObjectToWorldMatrix(actor->Level, DVector3(x, y, z), DRotator(DAngle::fromDeg(pitch), DAngle::fromDeg(angle), DAngle::fromDeg(roll)), actor->Scale, smf_flags, tic);
+	return ObjectToWorldMatrix(actor->Level, DVector3(x, y, z), DRotator(DAngle::fromDeg(pitch), DAngle::fromDeg(angle), DAngle::fromDeg(roll)), actor->InterpolatedScale(ticFrac), smf_flags, tic);
 }
 
 VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, DVector3 translation, DRotator rotation, DVector2 scaling, unsigned int flags, double tic)
@@ -279,18 +280,18 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 
 	// [BB] Weapon bob, very similar to the normal Doom weapon bob.
 
-	
+
 
 	objectToWorldMatrix.translate(rotation_pivot.X, rotation_pivot.Y, rotation_pivot.Z);
-	
+
 	objectToWorldMatrix.rotate(rotation.X, 0, 1, 0);
 	objectToWorldMatrix.rotate(rotation.Y, 1, 0, 0);
 	objectToWorldMatrix.rotate(rotation.Z, 0, 0, 1);
 
 	objectToWorldMatrix.translate(-rotation_pivot.X, -rotation_pivot.Y, -rotation_pivot.Z);
-	
+
 	objectToWorldMatrix.translate(translation.X, translation.Y, translation.Z);
-	
+
 
 	// [BB] For some reason the jDoom models need to be rotated.
 	objectToWorldMatrix.rotate(90.f, 0, 1, 0);
@@ -396,7 +397,7 @@ CalcModelFrameInfo CalcModelFrame(FLevelLocals *Level, const FSpriteModelFrame *
 			// [BB] To interpolate at more than 35 fps we take tic fractions into account.
 			float ticFraction = 0.;
 			// [BB] In case the tic counter is frozen we have to leave ticFraction at zero.
-			if (!WorldPaused() && !Level->isFrozen())
+			if (!WorldPaused(true) && !Level->isFrozen())
 			{
 				ticFraction = ticFrac;
 			}
@@ -495,7 +496,7 @@ bool CalcModelOverrides(int i, const FSpriteModelFrame *smf, DActorModelData* da
 				) {
 				out.modelframe = smf->modelframes[data->modelFrameGenerators[i]];
 
-				if (info.smfNext) 
+				if (info.smfNext)
 				{
 					if(info.smfNext->modelframes[data->modelFrameGenerators[i]] >= 0)
 					{
@@ -567,7 +568,7 @@ bool CalcModelOverrides(int i, const FSpriteModelFrame *smf, DActorModelData* da
 const TArray<VSMatrix> * ProcessModelFrame(FModel * animation, bool nextFrame, int i, const FSpriteModelFrame *smf, DActorModelData* modelData, const CalcModelFrameInfo &frameinfo, ModelDrawInfo &drawinfo, bool is_decoupled, double tic, BoneInfo *out)
 {
 	const TArray<TRS>* animationData = nullptr;
-	
+
 	if (drawinfo.animationid >= 0)
 	{
 		animation = Models[drawinfo.animationid];
@@ -632,6 +633,11 @@ static inline void RenderModelFrame(FModelRenderer *renderer, int i, const FSpri
 
 		if(frameinfo.smf_flags & MDL_MODELSAREATTACHMENTS || is_decoupled)
 		{
+			if(!boneData && is_decoupled)
+			{
+				boneData = mdl->CalculateBonesOnlyOffsets((modelData && modelData->modelBoneOverrides.SSize() > i)? &modelData->modelBoneOverrides[i] : nullptr, tic);
+			}
+
 			boneStartingPosition = boneData ? screen->mBones->UploadBones(*boneData) : -1;
 			evaluatedSingle = true;
 		}
@@ -643,7 +649,7 @@ static inline void RenderModelFrame(FModelRenderer *renderer, int i, const FSpri
 void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, int curTics, double ticFrac, FTranslationID translation, AActor* actor)
 {
 	double tic = actor->Level->totaltime;
-	if (!WorldPaused() && !actor->isFrozen())
+	if (!WorldPaused(true) && !actor->isFrozen())
 	{
 		tic += ticFrac;
 	}
@@ -1118,7 +1124,7 @@ void ParseModelDefLump(int Lump)
 						smf.modelframes[index] = sc.Number;
 					}
 
-					for(int i=0; framechars[i]>0; i++)
+					for (int i = 0; i < static_cast<int>(framechars.Len()) && framechars[i] > 0; i++)
 					{
 						char map[29]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 						int c = toupper(framechars[i])-'A';

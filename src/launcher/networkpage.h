@@ -45,6 +45,8 @@ private:
 	TextLabel* ParametersLabel = nullptr;
 	LineEdit* ParametersEdit = nullptr;
 	CheckboxLabel* SaveParametersCheckbox = nullptr;
+	TextLabel* PlayerClassLabel = nullptr;
+	LineEdit* PlayerClassEdit = nullptr;
 };
 
 class HostSubPage : public Widget
@@ -59,8 +61,6 @@ private:
 
 	NetworkPage* MainTab = nullptr;
 
-	TextLabel* NetModesLabel = nullptr;
-	Dropdown* NetModesDropdown = nullptr;
 	TextLabel* TicDupLabel = nullptr;
 	Dropdown* TicDupDropdown = nullptr;
 	CheckboxLabel* ExtraTicCheckbox = nullptr;

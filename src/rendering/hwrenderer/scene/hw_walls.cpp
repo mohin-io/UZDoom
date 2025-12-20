@@ -83,9 +83,13 @@ void SetSplitPlanes(FRenderState& state, const secplane_t& top, const secplane_t
 
 void HWWall::RenderWall(FRenderState &state, int textured)
 {
-	bool ditherT = (type == RENDERWALL_BOTTOM) && (seg->sidedef->Flags & WALLF_DITHERTRANS_BOTTOM);
-	ditherT |= (type == RENDERWALL_TOP) && (seg->sidedef->Flags & WALLF_DITHERTRANS_TOP);
-	ditherT = ditherT || (seg->sidedef->Flags & WALLF_DITHERTRANS_MID);
+	bool ditherT = false;
+	if (seg->sidedef != nullptr)
+	{
+		ditherT = (type == RENDERWALL_BOTTOM) && (seg->sidedef->Flags & WALLF_DITHERTRANS_BOTTOM);
+		ditherT |= (type == RENDERWALL_TOP) && (seg->sidedef->Flags & WALLF_DITHERTRANS_TOP);
+		ditherT = ditherT || (seg->sidedef->Flags & WALLF_DITHERTRANS_MID);
+	}
 	if (ditherT)
 	{
 		state.SetEffect(EFF_DITHERTRANS);
@@ -1472,7 +1476,7 @@ void HWWall::DoMidTexture(HWWallDispatcher *di, seg_t * seg, bool drawfogboundar
 		if (!tex || !tex->isValid())
 		{
 			if (front->GetTexture(sector_t::ceiling) == skyflatnum &&
-				back->GetTexture(sector_t::ceiling) == skyflatnum && !wrap)
+				back->GetTexture(sector_t::ceiling) == skyflatnum && !wrap && skew == 0)
 			{
 				// intra-sky lines do not clip the texture at all if there's no upper texture.
 				topleft = topright = texturetop;
@@ -2233,7 +2237,7 @@ void HWWall::Process(HWWallDispatcher *di, seg_t *seg, sector_t * frontsector, s
 	lightlist = NULL;
 
 	int rel = 0;
-	int orglightlevel = hw_ClampLight(frontsector->lightlevel);
+	int orglightlevel = hw_ClampLight(frontsector->lightlevel, false);
 	bool foggy = (!Colormap.FadeColor.isBlack() || di->Level->flags&LEVEL_HASFADETABLE);	// fog disables fake contrast
 
 	alpha = 1.0f;

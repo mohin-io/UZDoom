@@ -356,6 +356,8 @@ DefaultOptionMenu
 OptionMenu "OptionsMenu" protected
 {
 	Title "$OPTMNU_TITLE"
+	Submenu "$OS_TITLE", "os_Menu"
+	StaticText " "
 	Submenu "$OPTMNU_CONTROLS",			"CustomizeControls"
 	Submenu "$OPTMNU_MOUSE",			"MouseOptions"
 	Submenu "$OPTMNU_JOYSTICK",			"JoystickOptions"
@@ -373,9 +375,7 @@ OptionMenu "OptionsMenu" protected
 	Submenu "$OPTMNU_DISPLAY",			"VideoOptions"
 	Submenu "$OPTMNU_VIDEO",			"VideoModeMenu"
 	StaticText " "
-	Submenu "$OS_TITLE", "os_Menu"
 	Option "$OPTMNU_SIMPLEON",			"m_simpleoptions", "OnOff"
-	
 	StaticText " "
 	SafeCommand	"$OPTMNU_DEFAULTS",		"reset2defaults"
 	SafeCommand	"$OPTMNU_RESETTOSAVED",	"reset2saved"
@@ -902,6 +902,12 @@ OptionValue RocketTrailTypes
 	3.0, "$OPTVAL_SPRITESPARTICLES"
 }
 
+OptionValue RocketExplosionStyles
+{
+	0, "$OPTVAL_ROCKETEXP_STYLE_TRANS"
+	1, "$OPTVAL_ROCKETEXP_STYLE_ADD"
+}
+
 OptionValue BloodTypes
 {
 	0.0, "$OPTVAL_SPRITES"
@@ -949,8 +955,7 @@ OptionValue VanillaTrans
 {
 	0.0, "$OPTVAL_VTFZDOOM"
 	1.0, "$OPTVAL_VTFVANILLA"
-	2.0, "$OPTVAL_VTAZDOOM"
-	3.0, "$OPTVAL_VTAVANILLA"
+	2.0, "$OPTVAL_AUTO"
 }
 
 OptionValue PreferBackend
@@ -1010,6 +1015,7 @@ OptionMenu "VideoOptions" protected
 	Option "$DSPLYMNU_OLDTRANS",				"r_vanillatrans", "VanillaTrans"
 	Option "$DSPLYMNU_FAKECONTRAST",			"r_fakecontrast", "Contrast"
 	Option "$DSPLYMNU_ROCKETTRAILS",			"cl_rockettrails", "RocketTrailTypes"
+	Option "$DSPLYMNU_ROCKETEXPSTYLE",			"addrocketexplosion", "RocketExplosionStyles"
 	Option "$DSPLYMNU_BLOODTYPE",				"cl_bloodtype", "BloodTypes"
 	Option "$DSPLYMNU_PUFFTYPE",				"cl_pufftype", "PuffTypes"
 	Slider "$DSPLYMNU_MAXPARTICLES",			"r_maxparticles", 100, 10000, 100, 0
@@ -1131,6 +1137,7 @@ OptionMenu "FlashOptions" protected
 	StaticText " "
 	Slider "$DSPLYMNU_BLOODFADE",				"blood_fade_scalar", 0.0, 1.0, 0.05, 2
 	Slider "$DSPLYMNU_PICKUPFADE",				"pickup_fade_scalar", 0.0, 1.0, 0.05, 2
+	Slider "$DSPLYMNU_POWERUPFADE",				"powerup_fade_scalar", 0.0, 1.0, 0.05, 2
 	Slider "$DSPLYMNU_WATERFADE",				"underwater_fade_scalar", 0.0, 1.0, 0.05, 2
 }
 
@@ -1366,6 +1373,7 @@ OptionMenu "MiscOptions" protected
 
 OptionValue MapColorTypes
 {
+	-1, "$OPTVAL_DEFAULT"
 	0, "$OPTVAL_CUSTOM"
 	1, "$OPTVAL_TRADITIONALDOOM"
 	2, "$OPTVAL_TRADITIONALSTRIFE"
@@ -2313,6 +2321,10 @@ OptionMenu ModReplayerOptions protected
 	6, "$OPTVAL_YMFMOPNA"
 	// 7'th is a VGM Dumper, it should NEVER been used during normal runtime
 	8, "$OPTVAL_NUKEDOPN2YM2612"
+	9, "$OPTVAL_OPN2YM2612LLE"
+	// 10'th is the OPNA-LLE which wasn't included with the build due to impossibility to run in real-time
+	11, "$OPTVAL_OPN2YM3438LLE"
+	12, "$OPTVAL_OPN2YMF276LLE"
  }
 
  OptionMenu ADLOptions protected
@@ -2371,8 +2383,15 @@ OptionMenu ModReplayerOptions protected
 	Tooltip "$ACCMNU_TOOLTIP_EXAMPLE"
 	Option "$ACCMNU_TOOLTIP_CAP", "m_tooltip_capwidth", "OnOff"
 	Tooltip "$ACCMNU_TOOLTIP_EXAMPLE"
-	Option "$ACCMNU_TOOLIP_SCALE", "m_tooltip_small", "OffOn"
+	Option "$ACCMNU_TOOLTIP_SCALE", "m_tooltip_small", "OffOn"
 	Tooltip "$ACCMNU_TOOLTIP_EXAMPLE"
+	
+	StaticText ""
+	StaticText "$ACCMNU_LIGHT"
+	Slider "$ACCMNU_LIGHT_EXTRA", "r_extralight", -8, 8, 1, 0
+	Tooltip "$ACCMNU_TOOLTIP_LIGHT_EXTRA"
+	Slider "$ACCMNU_LIGHT_RADIUS", "r_visibility", 0.0, 16.0, 1.0, 1
+	Tooltip "$ACCMNU_TOOLTIP_LIGHT_RADIUS"
  }
 
 /*=======================================

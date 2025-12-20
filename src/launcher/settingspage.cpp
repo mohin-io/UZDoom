@@ -1,13 +1,50 @@
+/*
+** settingspage.cpp
+**
+**---------------------------------------------------------------------------
+**
+** Copyright 2024-2025 GZDoom Maintainers and Contributors
+**
+** This program is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
+**
+** This program is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
+**
+** You should have received a copy of the GNU General Public License
+** along with this program.  If not, see http://www.gnu.org/licenses/
+**
+**---------------------------------------------------------------------------
+**
+*/
 
 #include "settingspage.h"
+#include "findfile.h"
 #include "launcherwindow.h"
+#include "findfile.h"
+#include "gameconfigfile.h"
 #include "gstrings.h"
 #include "i_interface.h"
+#include "i_system.h"
 #include "v_video.h"
+#include "sc_man.h"
+
 #include <zwidget/core/resourcedata.h>
 #include <zwidget/widgets/listview/listview.h>
+#include <zwidget/widgets/dropdown/dropdown.h>
 #include <zwidget/widgets/textlabel/textlabel.h>
 #include <zwidget/widgets/checkboxlabel/checkboxlabel.h>
+
+static constexpr struct { const char* string; int flag; } FILELOAD_OPTS[] = {
+	{"OPTVAL_LAX", REQUIRE_NONE},
+	{"OPTVAL_DEFAULT", REQUIRE_DEFAULT},
+	{"OPTVAL_STRICT", REQUIRE_ALL},
+	{"OPTVAL_CUSTOM", -1}
+};
 
 SettingsPage::SettingsPage(LauncherWindow* launcher, const FStartupSelectionInfo& info) : Widget(nullptr), Launcher(launcher)
 {
@@ -58,7 +95,6 @@ SettingsPage::SettingsPage(LauncherWindow* launcher, const FStartupSelectionInfo
 #endif
 
 	LangList = new ListView(this);
-
 	try
 	{
 		auto data = LoadWidgetData("menudef.txt");
@@ -97,8 +133,32 @@ SettingsPage::SettingsPage(LauncherWindow* launcher, const FStartupSelectionInfo
 			LangList->SetSelectedItem(i);
 		++i;
 	}
-
 	LangList->OnChanged = [=](int i) { OnLanguageChanged(i); };
+
+	ExtraWadFlags = 0;
+
+	if (BaseFileSearch("lights.pk3", nullptr, true, GameConfig))
+		ExtraWadFlags |= 1;
+
+	if (BaseFileSearch("brightmaps.pk3", nullptr, true, GameConfig))
+		ExtraWadFlags |= 2;
+
+	if (BaseFileSearch("game_widescreen_gfx.pk3", nullptr, true, GameConfig))
+		ExtraWadFlags |= 4;
+
+	{
+		LoadLabel = new TextLabel(this);
+		LoadList = new Dropdown(this);
+		LoadList->SetMaxDisplayItems(2);
+		LoadList->SetDropdownDirection(false);
+		int opts = sizeof(FILELOAD_OPTS)/sizeof(FILELOAD_OPTS[0]), selected = opts-1;
+		for (int i = 0; i < opts; i++)
+		{
+			LoadList->AddItem(GStrings.GetString(FILELOAD_OPTS[i].string));
+			if (info.DefaultFileLoadBehaviour == FILELOAD_OPTS[i].flag) selected = i;
+		}
+		LoadList->SetSelectedItem(selected);
+	}
 }
 
 void SettingsPage::SetValues(FStartupSelectionInfo& info) const
@@ -115,6 +175,9 @@ void SettingsPage::SetValues(FStartupSelectionInfo& info) const
 	if (SupportWadsCheckbox->GetChecked()) flags |= 16;
 	info.DefaultStartFlags = flags;
 
+	int flBehaviour = FILELOAD_OPTS[LoadList->GetSelectedItem()].flag;
+	if (flBehaviour != -1) info.DefaultFileLoadBehaviour = flBehaviour;
+
 #ifdef RENDER_BACKENDS
 	int v = 1;
 	if (OpenGLCheckbox->GetChecked()) v = 0;
@@ -127,6 +190,7 @@ void SettingsPage::SetValues(FStartupSelectionInfo& info) const
 void SettingsPage::UpdateLanguage()
 {
 	LangLabel->SetText(GStrings.GetString("OPTMNU_LANGUAGE"));
+	LoadLabel->SetText(GStrings.GetString("PICKER_FILELOADING"));
 	GeneralLabel->SetText(GStrings.GetString("PICKER_GENERAL"));
 	ExtrasLabel->SetText(GStrings.GetString("PICKER_EXTRA"));
 	FullscreenCheckbox->SetText(GStrings.GetString("PICKER_FULLSCREEN"));
@@ -161,23 +225,19 @@ void SettingsPage::OnGeometryChanged()
 	double h = GetHeight();
 
 	GeneralLabel->SetFrameGeometry(0.0, y, 190.0, GeneralLabel->GetPreferredHeight());
-	ExtrasLabel->SetFrameGeometry(w - panelWidth, y, panelWidth, ExtrasLabel->GetPreferredHeight());
 	y += GeneralLabel->GetPreferredHeight();
 
 	FullscreenCheckbox->SetFrameGeometry(0.0, y, 190.0, FullscreenCheckbox->GetPreferredHeight());
-	LightsCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, LightsCheckbox->GetPreferredHeight());
 	y += FullscreenCheckbox->GetPreferredHeight();
 
 	DisableAutoloadCheckbox->SetFrameGeometry(0.0, y, 190.0, DisableAutoloadCheckbox->GetPreferredHeight());
-	BrightmapsCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, BrightmapsCheckbox->GetPreferredHeight());
 	y += DisableAutoloadCheckbox->GetPreferredHeight();
 
 	DontAskAgainCheckbox->SetFrameGeometry(0.0, y, 190.0, DontAskAgainCheckbox->GetPreferredHeight());
-	WidescreenCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, WidescreenCheckbox->GetPreferredHeight());
 	y += DontAskAgainCheckbox->GetPreferredHeight();
 
 	SupportWadsCheckbox->SetFrameGeometry(0.0, y, 190.0, SupportWadsCheckbox->GetPreferredHeight());
-	y += SupportWadsCheckbox->GetPreferredHeight() + 10.0;
+	y += SupportWadsCheckbox->GetPreferredHeight();
 	const double optionsBottom = y;
 
 #ifdef RENDER_BACKENDS
@@ -195,14 +255,55 @@ void SettingsPage::OnGeometryChanged()
 	GLESCheckbox->SetFrameGeometry(x, y, 190.0, GLESCheckbox->GetPreferredHeight());
 	y += GLESCheckbox->GetPreferredHeight();
 #endif
+	const double backendsBottom = y;
 
-	y = max<double>(y, optionsBottom);
+	// Only show extra wads if they exist.
+	// These contain assets that are illegal for indie games
+	// to distribute, so sometimes they won't be present.
+	if (ExtraWadFlags != 0)
+	{
+		y = 0;
+		ExtrasLabel->SetFrameGeometry(w - panelWidth, y, panelWidth, ExtrasLabel->GetPreferredHeight());
+		y += ExtrasLabel->GetPreferredHeight();
+
+		if (ExtraWadFlags & 1)
+		{
+			LightsCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, LightsCheckbox->GetPreferredHeight());
+			y += LightsCheckbox->GetPreferredHeight();
+		}
+
+		if (ExtraWadFlags & 2)
+		{
+			BrightmapsCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, BrightmapsCheckbox->GetPreferredHeight());
+			y += BrightmapsCheckbox->GetPreferredHeight();
+		}
+
+		if (ExtraWadFlags & 4)
+		{
+			WidescreenCheckbox->SetFrameGeometry(w - panelWidth, y, panelWidth, WidescreenCheckbox->GetPreferredHeight());
+			y += WidescreenCheckbox->GetPreferredHeight();
+		}
+	}
+
+	y = max<double>(y, max<double>(optionsBottom, backendsBottom)) + 10.0;
 	if (!hideLanguage)
 	{
 		LangLabel->SetFrameGeometry(0.0, y, w, LangLabel->GetPreferredHeight());
 		y += LangLabel->GetPreferredHeight();
-		LangList->SetFrameGeometry(0.0, y, w, std::max(h - y, 0.0));
+		double temp = std::max(h - y - LoadList->GetPreferredHeight() - 4.0, 0.0);
+		LangList->SetFrameGeometry(0.0, y, w, temp);
+		y += temp + 4.0;
 	}
+
+	LoadLabel->SetFrameGeometry(
+		0.0, y+(LoadList->GetPreferredHeight()-LoadLabel->GetPreferredHeight())/2,
+		LoadLabel->GetPreferredWidth(), LoadLabel->GetPreferredHeight()
+	);
+	LoadList->SetFrameGeometry(
+		LoadLabel->GetPreferredWidth()+4.0, y,
+		LoadList->GetPreferredWidth(), LoadList->GetPreferredHeight()
+	);
+	y += LoadList->GetHeight();
 
 	Launcher->UpdatePlayButton();
 }

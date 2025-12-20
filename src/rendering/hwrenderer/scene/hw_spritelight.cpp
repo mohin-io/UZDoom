@@ -168,8 +168,8 @@ void HWDrawInfo::GetDynSpriteLight(AActor *self, float x, float y, float z, FSec
 					if (light->IsSpot())
 					{
 						L *= -1.0f / dist;
-						DAngle negPitch = -*light->pPitch;
-						DAngle Angle = light->target->Angles.Yaw;
+						DAngle negPitch = -light->Pitch;
+						DAngle Angle = light->Yaw;
 						double xyLen = negPitch.Cos();
 						double spotDirX = -Angle.Cos() * xyLen;
 						double spotDirY = -Angle.Sin() * xyLen;
@@ -218,11 +218,11 @@ void HWDrawInfo::GetDynSpriteLight(AActor *self, float x, float y, float z, FSec
 
 void HWDrawInfo::GetDynSpriteLight(AActor *thing, particle_t *particle, float *out)
 {
-	if (thing != NULL)
+	if (thing && !(thing->renderflags2 & RF2_NODYNAMICLIGHTING))
 	{
 		GetDynSpriteLight(thing, (float)thing->X(), (float)thing->Y(), (float)thing->Center(), thing->section, thing->Sector->PortalGroup, out);
 	}
-	else if (particle != NULL)
+	else if (particle && !(particle->flags & SPF_NODYNAMICLIGHTING))
 	{
 		GetDynSpriteLight(NULL, (float)particle->Pos.X, (float)particle->Pos.Y, (float)particle->Pos.Z, particle->subsector->section, particle->subsector->sector->PortalGroup, out);
 	}

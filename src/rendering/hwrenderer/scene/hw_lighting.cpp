@@ -35,7 +35,7 @@
 static float distfogtable[2][256];	// light to fog conversion table for black fog
 
 CVAR(Int, gl_weaponlight, 8, CVAR_ARCHIVE);
-CVAR(Bool, gl_enhanced_nightvision, true, CVAR_ARCHIVE|CVAR_NOINITCALL)
+CVAR(Bool, gl_enhanced_nightvision, false, CVAR_ARCHIVE|CVAR_NOINITCALL)
 
 //==========================================================================
 //
@@ -187,7 +187,7 @@ float GetFogDensity(FLevelLocals* Level, ELightMode lightmode, int lightlevel, P
 		// case 2: black fog
 		if ((!isDoomSoftwareLighting(lightmode) || blendfactor > 0) && !(Level->flags3 & LEVEL3_NOLIGHTFADE))
 		{
-			density = distfogtable[lightmode != ELightMode::LinearStandard][hw_ClampLight(lightlevel)];
+			density = distfogtable[lightmode != ELightMode::LinearStandard][hw_ClampLight(lightlevel, false)];
 		}
 		else
 		{

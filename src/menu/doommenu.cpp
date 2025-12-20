@@ -71,7 +71,7 @@ EXTERN_CVAR(Bool, show_messages)
 EXTERN_CVAR(Bool, haptics_do_menus)
 EXTERN_CVAR(Float, hud_scalefactor)
 
-CVAR(Bool, m_simpleoptions, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG);
+CVAR(Bool, m_simpleoptions, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG);
 CVAR(Bool, m_simpleoptions_view, true, 0);
 
 typedef void(*hfunc)();
@@ -330,7 +330,7 @@ void OnMenuOpen(bool makeSound)
 //
 //==========================================================================
 
-CUSTOM_CVAR(Float, dimamount, -1.f, CVAR_ARCHIVE)
+CUSTOM_CVAR(Float, dimamount, 0.8f, CVAR_ARCHIVE)
 {
 	if (self < 0.f && self != -1.f)
 	{
@@ -341,7 +341,7 @@ CUSTOM_CVAR(Float, dimamount, -1.f, CVAR_ARCHIVE)
 		self = 1.f;
 	}
 }
-CVAR(Color, dimcolor, 0xffd700, CVAR_ARCHIVE)
+CVAR(Color, dimcolor, 0x000000, CVAR_ARCHIVE)
 
 void System_M_Dim()
 {
@@ -417,10 +417,10 @@ CCMD (menu_quit)
 	{
 		if (!netgame)
 		{
-			if (gameinfo.quitSound.IsNotEmpty())
+			if (gameinfo.quitSound.IsNotEmpty() && S_FindSound(gameinfo.quitSound).isvalid())
 			{
 				S_Sound(CHAN_VOICE, CHANF_UI|(haptics_do_menus?CHANF_RUMBLE:CHANF_NORUMBLE), gameinfo.quitSound, snd_menuvolume, ATTN_NONE);
-				I_WaitVBL(105);
+				I_WaitVBL(clamp(S_GetMSLength(S_FindSound(gameinfo.quitSound))*0.0735, 105.0, 350.0)); // Aim for 5% over length of sound, to a maximum 5 seconds
 			}
 		}
 		M_Quit();

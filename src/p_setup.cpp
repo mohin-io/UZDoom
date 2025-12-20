@@ -305,8 +305,12 @@ void FLevelLocals::ClearLevelData(bool fullgc)
 
 	total_monsters = total_items = total_secrets =
 	killed_monsters = found_items = found_secrets = 0;
+	LocalTimer = LocalWorldTimer = 0;
+	sky1pos = sky2pos = 0.0;
+	hw_sky1pos = hw_sky2pos = hw_skymistpos = 0.0;
+	TexAnim.ResetTimers();
 
-	max_velocity = avg_velocity = 0;
+	ClearVelocities();
 
 	for (int i = 0; i < 4; i++)
 	{

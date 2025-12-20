@@ -620,8 +620,8 @@ class Actor : Thinker native
 	virtual native void BeginPlay();
 	virtual native void Activate(Actor activator);
 	virtual native void Deactivate(Actor activator);
-	virtual native int DoSpecialDamage (Actor target, int damage, Name damagetype);
-	virtual native int TakeSpecialDamage (Actor inflictor, Actor source, int damage, Name damagetype);
+	virtual native int DoSpecialDamage (Actor target, int damage, Name damagetype, int flags = 0, double angle = 0);
+	virtual native int TakeSpecialDamage (Actor inflictor, Actor source, int damage, Name damagetype, int flags = 0, double angle = 0);
 	virtual native void Die(Actor source, Actor inflictor, int dmgflags = 0, Name MeansOfDeath = 'none');
 	virtual native bool Slam(Actor victim);
 	virtual void Touch(Actor toucher) {}
@@ -888,7 +888,7 @@ class Actor : Thinker native
 	native void SpawnTeleportFog(Vector3 pos, bool beforeTele, bool setTarget);
 	native Actor RoughMonsterSearch(int distance, bool onlyseekable = false, bool frontonly = false, double fov = 0);
 	native clearscope int ApplyDamageFactor(Name damagetype, int damage);
-	native int GetModifiedDamage(Name damagetype, int damage, bool passive, Actor inflictor = null, Actor source = null, int flags = 0);
+	native int GetModifiedDamage(Name damagetype, int damage, bool passive, Actor inflictor = null, Actor source = null, int flags = 0, double angle = 0.);
 	native bool CheckBossDeath();
 	native bool CheckFov(Actor target, double fov);
 
@@ -1768,7 +1768,7 @@ class Actor : Thinker native
 				A_StartSound("*grunt", CHAN_VOICE, CHANF_NORUMBLE);
 				grunted = true;
 			}
-			bool isliquid = (pos.Z <= floorz) && HitFloor ();
+			bool isliquid = (pos.Z <= floorz) && GetFloorTerrain().IsLiquid;
 			if (onmobj != NULL || !isliquid)
 			{
 				if (!grunted)
@@ -1823,7 +1823,7 @@ class Actor : Thinker native
 	{
 		if (!CVar.GetCVar("haptics_do_world").GetBool()) return;
 
-		bool isliquid = (pos.Z <= floorz) && HitFloor ();
+		bool isliquid = (pos.Z <= floorz) && GetFloorTerrain().IsLiquid;
 		if (onmobj != NULL || !isliquid)
 		{
 			Haptics.Rumble("*land");

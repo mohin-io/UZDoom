@@ -6,6 +6,7 @@
 ** Copyright 1998-2009 Randy Heit
 ** Copyright 2009 Christoph Oelckers
 ** Copyright 2017-2025 GZDoom Maintainers and Contributors
+** Copyright 2025 UZDoom Maintainers and Contributors
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -34,8 +35,10 @@
 **
 */
 
+#include "c_cvars.h"
 #include "cmdlib.h"
 #include "d_main.h"
+#include "d_steam.h"
 #include "engineerrors.h"
 #include "filesystem.h"
 #include "findfile.h"
@@ -52,13 +55,23 @@
 
 EXTERN_CVAR(Bool, queryiwad);
 EXTERN_CVAR(String, queryiwad_key);
-EXTERN_CVAR(Bool, disableautoload)
-EXTERN_CVAR(Bool, autoloadlights)
-EXTERN_CVAR(Bool, autoloadbrightmaps)
-EXTERN_CVAR(Bool, autoloadwidescreen)
-EXTERN_CVAR(String, language)
+EXTERN_CVAR(Bool, disableautoload);
+EXTERN_CVAR(Bool, autoloadlights);
+EXTERN_CVAR(Bool, autoloadbrightmaps);
+EXTERN_CVAR(Bool, autoloadwidescreen);
+EXTERN_CVAR(String, language);
+EXTERN_CVAR(Int, i_exit_on_not_found);
 
 CVAR(Bool, i_loadsupportwad, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG) // Disabled in net games.
+CVAR(Bool, i_is_new_release, true, 0)
+CVAR(Int, i_display_new_release, 1, CVAR_ARCHIVE|CVAR_GLOBALCONFIG) // 0:no, 1: yes, 2: always for testing
+
+// Search game distributors' (Steam, GOG, Bethesda) paths for installed IWADs
+CVAR(Bool, i_searchdistributors, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+
+EXTERN_FARG(iwad);
+EXTERN_FARG(host);
+EXTERN_FARG(join);
 
 bool foundprio = false; // global to prevent iwad box from appearing
 
@@ -85,7 +98,7 @@ void FIWadManager::ParseIWadInfo(const char *fn, const char *data, int datasize,
 				// Skip the rest.
 				break;
 			}
-				
+
 			FIWADInfo *iwad = result ? result : &mIWadInfos[mIWadInfos.Reserve(1)];
 			sc.MustGetStringName("{");
 			while (!sc.CheckString("}"))
@@ -474,9 +487,13 @@ void FIWadManager::CollectSearchPaths()
 			}
 		}
 	}
-	mSearchPaths.Append(I_GetGogPaths());
-	mSearchPaths.Append(I_GetSteamPath());
-	mSearchPaths.Append(I_GetBethesdaPath());
+
+	if (i_searchdistributors)
+	{
+		mSearchPaths.Append(I_GetGogPaths());
+		mSearchPaths.Append(D_GetSteamGamePaths());
+		mSearchPaths.Append(I_GetBethesdaPath());
+	}
 
 	// Unify and remove trailing slashes
 	for (auto &str : mSearchPaths)
@@ -608,7 +625,7 @@ FString FIWadManager::IWADPathFileSearch(const FString &file)
 
 int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char *iwad, const char *zdoom_wad, const char *optional_wad)
 {
-	const char *iwadparm = Args->CheckValue ("-iwad");
+	const char *iwadparm = Args->CheckValue (FArg_iwad);
 	FString custwad;
 
 	CollectSearchPaths();
@@ -668,9 +685,16 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 				break;
 			}
 		}
+
+		// -iwad not found
+		if (mFoundWads.Size() == numFoundWads)
+		{
+			D_FileNotFound(REQUIRE_IWAD, "game iwad", iwadparm);
+
+			// Revert back to standard behavior
+			iwadparm = nullptr;
+		}
 	}
-	// -iwad not found or not specified. Revert back to standard behavior.
-	if (mFoundWads.Size() == numFoundWads) iwadparm = nullptr;
 
 	// Check for symbolic links leading to non-existent files and for files that are unreadable.
 	for (unsigned int i = 0; i < mFoundWads.Size(); i++)
@@ -777,30 +801,33 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 #elif defined(__APPLE__)
 		gamedir = "~/Library/Application Support/" GAMENAMELOWERCASE "/";
 		cfgfile = "~/Library/Preferences/" GAMENAMELOWERCASE ".ini";
-#elif defined(IS_FLATPAK)
-		gamedir = "~/.var/app/" APPID "/.config/" GAMENAMELOWERCASE "/";
-		cfgfile = "~/.var/app/" APPID "/.config/" GAMENAMELOWERCASE "/" GAMENAMELOWERCASE ".ini";
-		extrasteps = "\n3. Validate your Flatpak permissions, so that Flatpak has access to your directories with wads";
 #else
-		gamedir = "~/.config/" GAMENAMELOWERCASE "/";
-		cfgfile = "~/.config/" GAMENAMELOWERCASE "/" GAMENAMELOWERCASE ".ini";
+		auto gd = FStringf("%s/games/" GAMENAMELOWERCASE, GetDataPath());
+		auto cd = FStringf("%s/" GAMENAMELOWERCASE ".ini", GetConfigPath());
+		gd.Substitute("$HOME/", "~/");
+		cd.Substitute("$HOME/", "~/");
+		gamedir = gd.GetChars();
+		cfgfile = cd.GetChars();
+#	if defined(IS_FLATPAK)
+		extrasteps = "\n3. Validate your Flatpak permissions, so that Flatpak has access to your directories with wads\n";
+#	endif
 #endif
 
 		I_FatalError(
-			"Cannot find a game IWAD (doom.wad, doom2.wad, heretic.wad, etc.).\n"
-			"Did you install " GAMENAME " properly? You can do either of the following:\n"
+			"Cannot find a game IWAD (doom.wad, heretic.wad, etc)!\n"
+			"Did you install " GAMENAME " properly?\n"
 			"\n"
+			"You can do any of the following:\n"
 			"1. Place one or more of these wads in %s\n"
-			"2. Edit your %s and add the\n"
-			"directories of your iwads to the list beneath [IWADSearch.Directories]"
-			"%s\n",
+			"2. Edit your %s by adding your iwad folders beneath [IWADSearch.Directories]"
+			"%s",
 			gamedir, cfgfile, extrasteps
 		);
 	}
 	int pick = 0;
 
 	// Present the IWAD selection box.
-	bool alwaysshow = (queryiwad && !Args->CheckParm("-iwad") && !foundprio);
+	bool alwaysshow = (queryiwad && !Args->CheckParm(FArg_iwad) && !foundprio);
 
 	if (!havepicked && (alwaysshow || picks.Size() > 1))
 	{
@@ -821,6 +848,11 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 		if (i_loadsupportwad) flags |= 16;
 
 		FStartupSelectionInfo info = FStartupSelectionInfo(wads, *Args, flags);
+
+		info.DefaultFileLoadBehaviour = i_exit_on_not_found;
+		info.isNewRelease = (i_display_new_release>1) || i_is_new_release;
+		info.notifyNewRelease = !!i_display_new_release;
+
 		if (I_PickIWad(queryiwad || HoldingQueryKey(queryiwad_key), info))
 		{
 			pick = info.SaveInfo();
@@ -829,6 +861,9 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 			autoloadbrightmaps = !!(info.DefaultStartFlags & 4);
 			autoloadwidescreen = !!(info.DefaultStartFlags & 8);
 			i_loadsupportwad = !!(info.DefaultStartFlags & 16);
+			i_exit_on_not_found = info.DefaultFileLoadBehaviour;
+			if (!info.notifyNewRelease)
+				i_display_new_release = 0; // don't change truthy values
 		}
 		else
 		{
@@ -863,7 +898,7 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 	{
 		// For net games all wads must be explicitly named to make it easier for the host to know
 		// exactly what's being loaded.
-		if (i_loadsupportwad && !Args->CheckParm("-join") && !Args->CheckParm("-host"))
+		if (i_loadsupportwad && !Args->CheckParm(FArg_join) && !Args->CheckParm(FArg_host))
 		{
 			FString supportWAD = IWADPathFileSearch(info.SupportWAD);
 

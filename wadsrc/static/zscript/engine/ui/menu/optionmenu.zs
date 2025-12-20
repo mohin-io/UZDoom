@@ -129,7 +129,7 @@ class OptionMenu : Menu
 		AnimatedTransition = desc.mAnimatedTransition;
 		Animated = desc.mAnimated;
 		MaxItems = 1;
-		mTooltipFont = desc.mTooltipFont;
+		mTooltipFont = desc.mTooltipFont ? desc.mTooltipFont : NewConsoleFont;
 		mCurrentTooltip = "";
 		mTooltipScrollTimer = m_tooltip_delay;
 		mTooltipScrollOffset = 0.0;
@@ -159,7 +159,14 @@ class OptionMenu : Menu
 			}
 		}
 
-		if (mDesc.mSelectedItem == -1) mDesc.mSelectedItem = FirstSelectable();
+		if (mDesc.mSelectedItem == -1)
+		{
+			mDesc.mSelectedItem = FirstSelectable();
+			if (mDesc.mSelectedItem >= 0 && mDesc.mItems[mDesc.mSelectedItem].mLabel == "$OS_TITLE")
+			{
+				mDesc.mSelectedItem = FirstSelectable(mDesc.mSelectedItem);
+			}
+		}
 		mDesc.CalcIndent();
 
 		// notify all items that the menu was just created.
@@ -168,7 +175,17 @@ class OptionMenu : Menu
 			mDesc.mItems[i].OnMenuCreated();
 		}
 
-		if (mDesc.mSelectedItem >= 0)
+		// Now that all items have been initialized, check if any have a tooltip to display.
+		foreach (item : mDesc.mItems)
+		{
+			if (item.GetTooltip().IsNotEmpty())
+			{
+				DrawTooltips = true;
+				break;
+			}
+		}
+
+		if (mDesc.mSelectedItem >= 0 && mDesc.mSelectedItem < mDesc.mItems.Size())
 			UpdateTooltip(mDesc.mItems[mDesc.mSelectedItem].GetTooltip());
 	}
 
@@ -187,7 +204,7 @@ class OptionMenu : Menu
 		Super.UpdateTooltip(tooltip);
 	}
 
-	virtual void DrawHoverTooltip(OptionMenuItemOptionBase selected, int indent, int y, int bottom)
+	version("4.15.1") virtual void DrawHoverTooltip(OptionMenuItemOptionBase selected, int indent, int y, int bottom)
 	{
 		if (!selected)
 			return;
@@ -212,7 +229,7 @@ class OptionMenu : Menu
 		int xPad = 10 * CleanXFac_1;
 		int yPad = 5 * CleanYFac_1;
 		int textHeight = mTooltipFont.GetHeight() * CleanYFac_1;
-		
+
 		int xCap, diff;
 		if (Screen.GetAspectRatio() > 16.0 / 9.0)
 		{
@@ -224,7 +241,7 @@ class OptionMenu : Menu
 			xCap = Screen.GetWidth();
 		}
 		xCap -= 11 * CleanXFac_1;
-		
+
 		int width = xCap - (indent - diff);
 		BrokenLines bl = mTooltipFont.BreakLines(StringTable.Localize(text), (width - xPad * 2) / CleanXFac_1);
 		int height = textHeight * bl.Count() + yPad * 2;
@@ -251,7 +268,7 @@ class OptionMenu : Menu
 					space = Abs(curY) - yPad - CleanXFac_1;
 					curY = CleanXFac_1;
 				}
-				
+
 				maxOffset = int(Ceil(double(space) / textHeight));
 				height -= textHeight * maxOffset;
 				if (mOptionValueTooltipScrollTimer <= 0.0)
@@ -325,17 +342,17 @@ class OptionMenu : Menu
 	//
 	//=============================================================================
 
-	int FirstSelectable()
+	int FirstSelectable(int start = -1)
 	{
 		// Go down to the first selectable item
-		int i = -1;
+		int i = start;
 		do
 		{
 			i++;
 		}
 		while (i < mDesc.mItems.Size() && !(mDesc.mItems[i].Selectable() && mDesc.mItems[i].Visible()));
 		if (i>=0 && i < mDesc.mItems.Size()) return i;
-		else return -1;
+		else return start;
 	}
 
 	//=============================================================================
@@ -603,7 +620,9 @@ class OptionMenu : Menu
 					while (visibleLinesToScroll < visibleLinesJumped && newScrollPos < mDesc.mItems.Size() - 1)
 					{
 						newScrollPos++;
-						if ((newScrollPos + mDesc.mScrollTop) < mDesc.mItems.Size() && mDesc.mItems[newScrollPos + mDesc.mScrollTop].Visible())
+
+						int tempIndex = newScrollPos + mDesc.mScrollTop;
+						if (tempIndex >= 0 && tempIndex < mDesc.mItems.Size() && mDesc.mItems[tempIndex].Visible())
 						{
 							visibleLinesToScroll++;
 						}
@@ -911,10 +930,13 @@ class OptionMenu : Menu
 
 		ScreenArea box;
 		GetTooltipArea(box);
+		if (!DrawTooltips)
+			box.y = Screen.GetHeight();
+
 		int ytop = y + mDesc.mScrollTop * 8 * CleanYfac_1;
 		LastRow = box.y - OptionHeight() * CleanYfac_1;
 		int rowheight = OptionMenuSettings.mLinespacing * CleanYfac_1 + 1;
-		
+
 		int _MaxItems = (LastRow - y) / rowheight + 1;
 		bool resized = _MaxItems != MaxItems;
 		MaxItems = _MaxItems;

@@ -1,4 +1,3 @@
-
 #ifndef __I_SYSTEM__
 #define __I_SYSTEM__
 
@@ -12,7 +11,7 @@ struct WadStuff;
 struct FStartupSelectionInfo;
 
 // [RH] Detects the OS the game is running under.
-void I_DetectOS (void);
+FString I_DetectOS (void);
 
 // Called by DoomMain.
 void CalculateCPUSpeed (void);
@@ -46,7 +45,7 @@ bool I_WriteIniFailed (const char* filename);
 
 // [RH] Checks the registry for Steam's install path, so we can scan its
 // directories for IWADs if the user purchased any through Steam.
-TArray<FString> I_GetSteamPath();
+FString I_GetSteamPath();
 
 // [GZ] Same deal for GOG paths
 TArray<FString> I_GetGogPaths();

@@ -787,6 +787,18 @@ void FTextureAnimator::ParseCameraTexture(FScanner &sc)
 			sc.UnGet();
 		}
 	}
+	if (sc.GetString())
+	{
+		if (sc.Compare("translucent"))
+		{
+			viewer->SetTranslucent(true);
+		}
+		else
+		{
+			sc.UnGet();
+		}
+	}
+
 	canvas->aspectRatio = (float)fitwidth / (float)fitheight;
 	viewer->SetDisplaySize((float)fitwidth, (float)fitheight);
 }
@@ -1183,6 +1195,35 @@ void FTextureAnimator::UpdateAnimations (uint64_t mstime)
 			{
 				TexMan.SetTranslation (anim->BasePic + i, anim->BasePic + (i + anim->CurFrame) % anim->NumFrames);
 			}
+		}
+	}
+}
+
+void FTextureAnimator::ResetTimers()
+{
+	for (auto& fire : mFireTextures)
+	{
+		fire.SwitchTime = 0u;
+		static_cast<FireTexture *>(fire.texture->GetTexture())->Reset();
+		fire.texture->CleanHardwareData();
+		if (fire.texture->GetSoftwareTexture())
+			delete fire.texture->GetSoftwareTexture();
+		fire.texture->SetSoftwareTexture(nullptr);
+	}
+	for (auto& anim : mAnimations)
+	{
+		anim.SwitchTime = 0u;
+		anim.CurFrame   = 0u;
+		if (anim.AnimType == FAnimDef::ANIM_OscillateDown)
+			anim.AnimType = FAnimDef::ANIM_OscillateUp;
+		if (anim.bDiscrete)
+		{
+			TexMan.SetTranslation(anim.BasePic, anim.Frames[anim.CurFrame].FramePic);
+		}
+		else
+		{
+			for (size_t i = 0u; i < anim.NumFrames; ++i)
+				TexMan.SetTranslation(anim.BasePic + i, anim.BasePic + (i + anim.CurFrame) % anim.NumFrames);
 		}
 	}
 }

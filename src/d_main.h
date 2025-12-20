@@ -31,14 +31,30 @@
 
 #include "doomtype.h"
 #include "gametype.h"
+#include "m_argv.h"
 #include "startupinfo.h"
 #include "c_cvars.h"
+#include "v_video.h"
 #include <csignal>
 
 extern bool		advancedemo;
 extern volatile sig_atomic_t gameloop_abort;
 EXTERN_CVAR(Bool, hud_toggled);
 void D_ToggleHud();
+
+EXTERN_FARG(version);
+EXTERN_FARG(v);
+EXTERN_FARG(help);
+EXTERN_FARG(h);
+EXTERN_FARG(doshelp);
+EXTERN_FARG(help_all);
+EXTERN_FARG(devparm);
+EXTERN_FARG(dumpjit);
+EXTERN_FARG(norun);
+EXTERN_FARG(loadgame);
+EXTERN_FARG(iwad);
+EXTERN_FARG(xlat);
+EXTERN_FARG(savedir);
 
 struct event_t;
 
@@ -157,6 +173,7 @@ public:
 
 };
 
+EXTERN_CVAR(Int, gl_texture_filter)
 #ifndef NO_SWRENDERER
 EXTERN_CVAR(Int, vid_rendermode)
 #else
@@ -166,6 +183,14 @@ constexpr int vid_rendermode = 4;
 inline bool V_IsHardwareRenderer()
 {
 	return vid_rendermode == 4;
+}
+
+// Unfortunately Intel forces on filtering if mipmapping is enabled, so None modes of filtering
+// need to outright disable it.
+inline bool V_DisableIntelMipmap()
+{
+	constexpr char Intel[] = "Intel";
+	return !stricmp(screen->vendorstring, Intel) && (gl_texture_filter == 1 || gl_texture_filter == 5 || gl_texture_filter == 6);
 }
 
 inline bool V_IsTrueColor()

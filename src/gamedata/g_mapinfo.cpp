@@ -142,7 +142,8 @@ static level_info_t *FindLevelByWarpTrans (int num)
 
 bool CheckWarpTransMap (FString &mapname, bool substitute)
 {
-	if (mapname[0] == '&' && (mapname[1] & 0xDF) == 'W' &&
+	if (mapname.Len() > 4 &&
+		mapname[0] == '&' && (mapname[1] & 0xDF) == 'W' &&
 		(mapname[2] & 0xDF) == 'T' && mapname[3] == '@')
 	{
 		level_info_t *lev = FindLevelByWarpTrans (atoi (&mapname[4]));
@@ -151,7 +152,7 @@ bool CheckWarpTransMap (FString &mapname, bool substitute)
 			mapname = lev->MapName;
 			return true;
 		}
-		else if (substitute)
+		else if (substitute && mapname.Len() > 5)
 		{
 			char a = mapname[4], b = mapname[5];
 			mapname = "MAP";
@@ -281,6 +282,7 @@ void level_info_t::Reset()
 	Snapshot = { 0,0,0,0,0,nullptr };
 	deferred.Clear();
 	skyspeed1 = skyspeed2 = skymistspeed = 0.f;
+	skymistyscale = 1.f;
 	fadeto = 0;
 	outsidefog = 0xff000000;
 	cdtrack = 0;
@@ -289,8 +291,10 @@ void level_info_t::Reset()
 	aircontrol = 0.f;
 	WarpTrans = 0;
 	airsupply = 20;
-	compatflags = compatflags2 = 0;
-	compatmask = compatmask2 = 0;
+	compatflags = 0;
+	compatflags2 = 0;
+	compatmask = 0;
+	compatmask2 = 0;
 	Translator = "";
 	RedirectType = NAME_None;
 	RedirectMapName = "";
@@ -1116,6 +1120,13 @@ DEFINE_MAP_OPTION(skymist, true)
 		}
 		info->skymistspeed = float(parse.sc.Float * (TICRATE / 1000.));
 	}
+}
+
+DEFINE_MAP_OPTION(skymistyscale, false)
+{
+	parse.ParseAssign();
+	parse.sc.MustGetFloat();
+	info->skymistyscale = clamp(parse.sc.Float, 0.002, 544.0);
 }
 
 // Vavoom compatibility
@@ -2052,10 +2063,10 @@ void FMapInfoParser::ParseMapDefinition(level_info_t &info)
 				break;
 
 			case MITYPE_CLRCOMPATFLAG:
-				info.compatflags &= ~handler->data1;
-				info.compatflags2 &= ~handler->data2;
-				info.compatmask |= handler->data1;
-				info.compatmask2 |= handler->data2;
+				info.compatflags &= ~ELevelCompatFlags::FromInt(handler->data1);
+				info.compatflags2 &= ~ELevelCompatFlags2::FromInt(handler->data2);
+				info.compatmask |= ELevelCompatFlags::FromInt(handler->data1);
+				info.compatmask2 |= ELevelCompatFlags2::FromInt(handler->data2);
 				break;
 
 			case MITYPE_COMPATFLAG:
@@ -2076,16 +2087,16 @@ void FMapInfoParser::ParseMapDefinition(level_info_t &info)
 
 				if (set)
 				{
-					info.compatflags |= handler->data1;
-					info.compatflags2 |= handler->data2;
+					info.compatflags |= ELevelCompatFlags::FromInt(handler->data1);
+					info.compatflags2 |= ELevelCompatFlags2::FromInt(handler->data2);
 				}
 				else
 				{
-					info.compatflags &= ~handler->data1;
-					info.compatflags2 &= ~handler->data2;
+					info.compatflags &= ~ELevelCompatFlags::FromInt(handler->data1);
+					info.compatflags2 &= ~ELevelCompatFlags2::FromInt(handler->data2);
 				}
-				info.compatmask |= handler->data1;
-				info.compatmask2 |= handler->data2;
+				info.compatmask |= ELevelCompatFlags::FromInt(handler->data1);
+				info.compatmask2 |= ELevelCompatFlags2::FromInt(handler->data2);
 			}
 			break;
 
@@ -2688,7 +2699,8 @@ void G_ParseMapInfo(FString basemapinfo)
 	level_info_t gamedefaults;
 	TArray<FString> secretMaps;
 
-	int flags1 = 0, flags2 = 0;
+	ELevelCompatFlags flags1 = 0;
+	ELevelCompatFlags2 flags2 = 0;
 	if (gameinfo.gametype == GAME_Doom)
 	{
 		int comp = fileSystem.CheckNumForName("COMPLVL");
